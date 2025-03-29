@@ -9,8 +9,8 @@ export class CommandRegistry {
    // console.trace('CommandRegistry initialized');
   }
 
-  registerCommand(commandConstructor: new () => Command, commandName: string = ''): void {
-    commandName = commandName || commandConstructor.name;
+  registerCommand( commandName: string, commandConstructor: new () => Command): void {
+    //commandName = commandName || commandConstructor.name;
     this.commands[commandName] = commandConstructor;
   }
 

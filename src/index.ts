@@ -6,8 +6,8 @@ import { CommandRegistry } from './commands/command.registry';
 import { GreetCommand } from './commands/greet.command';
 
 
-const commandRegistry = container.get(CommandRegistry);
-commandRegistry.registerCommand(GreetCommand, "greet");
+// const commandRegistry = container.get(CommandRegistry);
+// commandRegistry.registerCommand(GreetCommand, "greet");
 const commandFactory = container.get(ConcreteCommandFactory);
 
 
