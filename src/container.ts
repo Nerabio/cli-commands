@@ -14,8 +14,6 @@ container.bind(GreetCommand).toSelf();
 
 initializeCommands(container);
 const { lazyInject } = getDecorators(container);
-
-
 export { container, lazyInject };
 
 

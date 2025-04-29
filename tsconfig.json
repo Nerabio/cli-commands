@@ -10,6 +10,9 @@
     "rootDir": "./src",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+
+    "moduleResolution": "node",
+    "preserveConstEnums": true,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
