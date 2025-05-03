@@ -1,6 +1,6 @@
-import { Command } from '../interfaces/command.interface';
+import { Command } from '../../interfaces/command.interface';
 import { CommandRegistry } from './command.registry';
-import { CommandMetadata } from '../interfaces/command.metadata.interface';
+import { CommandMetadata } from '../../interfaces/command.metadata.interface';
 import { Container } from 'inversify';
 
 /**
@@ -8,12 +8,12 @@ import { Container } from 'inversify';
  * @param metadata - Metadata for the command.
  * @returns A decorator function.
  */
-const pendingRegistrations: Array<(container: Container) => void> = [];
+const commandRegistrationCallbacks: Array<(container: Container) => void> = [];
 
 export function CommandDecorator(metadata: CommandMetadata) {
     return (target: new () => Command) => {
         target.prototype.__commandMetadata = metadata;
-        pendingRegistrations.push((container) => {
+        commandRegistrationCallbacks.push((container) => {
             const registry = container.get(CommandRegistry);
             registry.registerCommand(metadata.name, target);
         });
@@ -21,6 +21,6 @@ export function CommandDecorator(metadata: CommandMetadata) {
 }
 
 export function initializeCommands(container: Container) {
-    pendingRegistrations.forEach(register => register(container));
-    pendingRegistrations.length = 0; 
+    commandRegistrationCallbacks.forEach(register => register(container));
+    commandRegistrationCallbacks.length = 0; 
 }

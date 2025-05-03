@@ -1,12 +1,11 @@
 
 export class FileProcessingState {
-  /** Исходное содержимое файла */
   originalContent: string;
-  /** Текущее содержимое после обработки */
   currentContent: string;
-  /** Путь к файлу (опционально) */
   filePath?: string;
-  /** Статистика обработки (сколько строк удалено, заменено и т.д.) */
+  imports?: string[];
+  exports?: string[];
+  checksum?: string;
   stats: {
     linesRemoved: number;
     linesReplaced: number;

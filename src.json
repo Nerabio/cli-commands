@@ -1,0 +1,535 @@
+[
+  {
+    "filePath": "src/commands/add-file.command.ts",
+    "imports": [
+      "./core/command.decorator",
+      "path",
+      "../procedures",
+      "../procedures/file-processing-state",
+      "fs/promises",
+      "../interfaces/command.interface",
+      "../interfaces/json-scheme.interface",
+      "../validations"
+    ],
+    "exports": [
+      "AddFileCommand"
+    ],
+    "checksum": "72be67443ed792dc1ae690d262971b7f",
+    "source": "import { CommandDecorator } from \"./core/command.decorator\";\nimport path from \"path\";\nimport {\n  processFile,\n  createChecksum,\n  extractImports,\n  extractExports,\n  removeEmptyLines,\n  removeLinesWithWord,\n  replaceComments,\n} from \"../procedures\";\nimport { FileProcessingState } from \"../procedures/file-processing-state\";\nimport fs, { constants } from \"fs/promises\";\nimport { Command } from \"../interfaces/command.interface\";\nimport { JsonScheme } from \"../interfaces/json-scheme.interface\";\nimport { FileExistsRule, FileExtensionRule, Validate } from \"../validations\";\n@CommandDecorator({\n  name: \"add\",\n  description: \"Add single file to project JSON\",\n})\nexport class AddFileCommand implements Command {\n  @Validate([\n    new FileExistsRule(\"filePath\"),\n    new FileExtensionRule(\"filePath\", [\".ts\", \".js\"]),\n  ])\n  async execute([{ filePath }, options]: [\n    { filePath: string },\n    { db?: string }\n  ]): Promise<void> {\n    const fullPath = path.resolve(filePath);\n    const jsonFile = options?.db ?? \"src.json\";\n    const currentData = await this.getProjectData(jsonFile);\n    if (currentData.some((f: any) => path.resolve(f.filePath) === fullPath)) {\n      console.log(`File ${filePath} already exists in src.json`);\n      return;\n    }\n    const content = await fs.readFile(fullPath, \"utf-8\");\n    let state = new FileProcessingState(content, fullPath);\n    state = processFile(\n      state,\n      createChecksum(),\n      extractImports(),\n      extractExports(),\n      removeEmptyLines(),\n      replaceComments()\n    );\n    currentData.push({\n      filePath: filePath,\n      imports: state.imports,\n      exports: state.exports,\n      checksum: state.checksum,\n      source: content,\n    });\n    await this.writeFile(jsonFile, currentData);\n    console.log(`File ${filePath} successfully added to ${jsonFile}`);\n  }\n  private async getProjectData(filePath: string): Promise<JsonScheme[]> {\n    const projectJsonPath = path.resolve(filePath);\n    try {\n      console.log(projectJsonPath);\n      await fs.access(projectJsonPath, constants.R_OK | constants.W_OK);\n      return Promise.resolve(\n        JSON.parse(await fs.readFile(projectJsonPath, \"utf-8\"))\n      );\n    } catch {\n      await this.writeFile(projectJsonPath);\n      return Promise.resolve([]);\n    }\n  }\n  private async writeFile(\n    filePath: string,\n    currentData: JsonScheme[] = []\n  ): Promise<void> {\n    return await fs.writeFile(filePath, JSON.stringify(currentData, null, 2));\n  }\n}"
+  },
+  {
+    "filePath": "src/commands/core/command.decorator.ts",
+    "imports": [
+      "../../interfaces/command.interface",
+      "./command.registry",
+      "../../interfaces/command.metadata.interface",
+      "inversify"
+    ],
+    "exports": [
+      "CommandDecorator",
+      "initializeCommands"
+    ],
+    "checksum": "336cbafa94eef436175760b55bfd8024",
+    "source": "import { Command } from '../../interfaces/command.interface';\nimport { CommandRegistry } from './command.registry';\nimport { CommandMetadata } from '../../interfaces/command.metadata.interface';\nimport { Container } from 'inversify';\n/**\n * Decorator for registering a command.\n * @param metadata - Metadata for the command.\n * @returns A decorator function.\n */\nconst commandRegistrationCallbacks: Array<(container: Container) => void> = [];\nexport function CommandDecorator(metadata: CommandMetadata) {\n    return (target: new () => Command) => {\n        target.prototype.__commandMetadata = metadata;\n        commandRegistrationCallbacks.push((container) => {\n            const registry = container.get(CommandRegistry);\n            registry.registerCommand(metadata.name, target);\n        });\n    };\n}\nexport function initializeCommands(container: Container) {\n    commandRegistrationCallbacks.forEach(register => register(container));\n    commandRegistrationCallbacks.length = 0; \n}"
+  },
+  {
+    "filePath": "src/commands/core/command.factory.ts",
+    "imports": [
+      "../../interfaces/command.interface",
+      "../../interfaces/command.metadata.interface",
+      "./command.registry",
+      "../../interfaces/command-factory.interface",
+      "inversify",
+      "../../container"
+    ],
+    "exports": [
+      "ConcreteCommandFactory"
+    ],
+    "checksum": "b0e682d0e06570fddf3e1e0767ba2b53",
+    "source": "import { Command } from \"../../interfaces/command.interface\";\nimport { CommandMetadata } from \"../../interfaces/command.metadata.interface\";\nimport { CommandRegistry } from \"./command.registry\";\nimport { CommandFactory } from \"../../interfaces/command-factory.interface\";\nimport { injectable } from \"inversify\";\nimport { container } from \"../../container\";\n@injectable()\nexport class ConcreteCommandFactory implements CommandFactory {\n  constructor(private readonly registry: CommandRegistry) {}\n  createCommand(commandName: string): Command | null {\n    const CommandConstructor = this.registry.getCommandConstructor(commandName);\n    if (CommandConstructor) {\n      return container.get(CommandConstructor);\n    }\n    return null;\n  }\n  getCommandMetadata(commandName: string): CommandMetadata | undefined {\n    const CommandConstructor = this.registry.getCommandConstructor(commandName);\n    return this.getCommandMetadataFromConstructor(CommandConstructor);\n  }\n  private getCommandMetadataFromConstructor(CommandConstructor: new (...args: any[]) => Command | null): CommandMetadata | undefined {\n    if (CommandConstructor) {\n      return CommandConstructor.prototype.__commandMetadata;\n    }\n    return undefined;\n  }\n}"
+  },
+  {
+    "filePath": "src/commands/core/command.registry.ts",
+    "imports": [
+      "../../interfaces/command.interface"
+    ],
+    "exports": [
+      "CommandRegistry"
+    ],
+    "checksum": "e2617ec0312beba9ce03e9fdcde849a6",
+    "source": "import { Command } from \"../../interfaces/command.interface\";\nexport class CommandRegistry {\n  private commands: { [key: string]: new () => Command } = {};\n  registerCommand( commandName: string, commandConstructor: new () => Command): void {\n    this.commands[commandName] = commandConstructor;\n  }\n  getCommandConstructor(commandName: string): new () => Command | null {\n    return this.commands[commandName];\n  }\n}"
+  },
+  {
+    "filePath": "src/commands/directory.command.ts",
+    "imports": [
+      "inversify",
+      "../interfaces/command.interface",
+      "./core/command.decorator",
+      "../utils/save-to-json",
+      "../procedures",
+      "../validations"
+    ],
+    "exports": [
+      "DirectoryCommand"
+    ],
+    "checksum": "6817598008dc58b32dbb24656b52db01",
+    "source": "import { injectable } from \"inversify\";\nimport { Command } from \"../interfaces/command.interface\";\nimport { CommandDecorator } from \"./core/command.decorator\";\nimport { saveToJson } from \"../utils/save-to-json\";\nimport {\n  sourceFilesCollector,\n  processFile,\n  createChecksum,\n  extractImports,\n  extractExports,\n  removeEmptyLines,\n  removeLinesWithWord,\n  replaceComments,\n} from \"../procedures\";\nimport { IsDirectoryRule, Validate } from \"../validations\";\n@CommandDecorator({\n  name: \"dir\",\n  description:\n    \"Recursively collects project files from a given directory example: ./src\",\n})\n@injectable()\nexport class DirectoryCommand implements Command {\n  @Validate([new IsDirectoryRule(\"pathDirectory\")])\n  async execute([{ pathDirectory }, options]: [\n    { pathDirectory: string },\n    { db?: string }\n  ]): Promise<void> {\n    const collector = sourceFilesCollector(\n      pathDirectory,\n      [\".ts\"],\n      async (state) =>\n        processFile(\n          state,\n          createChecksum(),\n          extractImports(),\n          extractExports(),\n          removeEmptyLines(),\n          replaceComments()\n        )\n    );\n    const processedFiles = await collector.collect();\n    const fileDb = options?.db ?? pathDirectory;\n    saveToJson(processedFiles, fileDb);\n  }\n}"
+  },
+  {
+    "filePath": "src/commands/dump.command.ts",
+    "imports": [
+      "../interfaces",
+      "../validations",
+      "./core/command.decorator",
+      "path",
+      "fs/promises",
+      "../procedures",
+      "../procedures/file-processing-state",
+      "../utils/save-to-json"
+    ],
+    "exports": [
+      "DumpCommand"
+    ],
+    "checksum": "6ea90e63901c43d8fb98c925889c688b",
+    "source": "import { Command } from \"../interfaces\";\nimport { Validate, FileExistsRule, FileExtensionRule } from \"../validations\";\nimport { CommandDecorator } from \"./core/command.decorator\";\nimport path from \"path\";\nimport fs, { constants } from \"fs/promises\";\nimport {\n  processFile,\n  createChecksum,\n  extractImports,\n  extractExports,\n} from \"../procedures\";\nimport { FileProcessingState } from \"../procedures/file-processing-state\";\nimport { saveToJson } from \"../utils/save-to-json\";\n@CommandDecorator({\n  name: \"dump\",\n  description:\n    \"Creates a selective dump of the listed files for analyzing specific solutions\",\n})\nexport class DumpCommand implements Command {\n  @Validate([\n    new FileExistsRule(\"filePath\"),\n    new FileExtensionRule(\"filePath\", [\".txt\"]),\n  ])\n  async execute([{ filePath }, options]: [\n    { filePath: string },\n    { db?: string }\n  ]): Promise<void> {\n    const fullPathList = path.resolve(filePath);\n    const jsonFile = options?.db ?? \"src.json\";\n    const selectedFiles = await this.getSelectedFiles(fullPathList);\n    \n    const processedFiles: FileProcessingState[] = [];\n    for (const filePath of selectedFiles) {\n      const content = await fs.readFile(filePath, \"utf-8\");\n      \n      let state = new FileProcessingState(content, filePath);\n      state = processFile(\n        state,\n        createChecksum(),\n        extractImports(),\n        extractExports()\n      );\n      processedFiles.push({\n        filePath,\n        imports: state.imports,\n        exports: state.exports,\n        checksum: state.checksum,\n        currentContent: state.currentContent,\n        originalContent: state.originalContent,\n        stats: state.stats,\n      });\n    }\n    \n    saveToJson(processedFiles, jsonFile);\n    console.log(\"Dump успешно сохранён!\");\n  }\n  private async getSelectedFiles(filePath: string): Promise<string[]> {\n    const textList = path.resolve(filePath);\n    try {\n      await fs.access(textList, constants.R_OK | constants.W_OK);\n      return Promise.resolve(\n        (await fs.readFile(textList, \"utf-8\")).split(\"\\n\")\n      );\n    } catch {\n      return Promise.resolve([]);\n    }\n  }\n}"
+  },
+  {
+    "filePath": "src/commands/index.ts",
+    "imports": [
+      "./core/command.registry",
+      "./core/command.factory",
+      "./core/command.decorator",
+      "./directory.command",
+      "./add-file.command",
+      "./dump.command"
+    ],
+    "exports": [
+      "CommandRegistry",
+      "ConcreteCommandFactory",
+      "initializeCommands",
+      "DirectoryCommand",
+      "AddFileCommand",
+      "DumpCommand"
+    ],
+    "checksum": "a15b266d1daf8bf8d2ef0f300485a6ed",
+    "source": "export { CommandRegistry } from \"./core/command.registry\";\nexport { ConcreteCommandFactory } from \"./core/command.factory\";\nexport { initializeCommands } from \"./core/command.decorator\";\nexport { DirectoryCommand } from \"./directory.command\";\nexport { AddFileCommand } from \"./add-file.command\";\nexport { DumpCommand } from \"./dump.command\";"
+  },
+  {
+    "filePath": "src/container.ts",
+    "imports": [
+      "inversify",
+      "inversify-inject-decorators",
+      "./commands"
+    ],
+    "exports": [
+      "container",
+      "lazyInject"
+    ],
+    "checksum": "9407f39de94a01ebd3dbfdd8969b6213",
+    "source": "import \"reflect-metadata\";\nimport { Container } from \"inversify\";\nimport getDecorators from \"inversify-inject-decorators\";\nimport {\n  CommandRegistry,\n  ConcreteCommandFactory,\n  DirectoryCommand,\n  AddFileCommand,\n  DumpCommand,\n  initializeCommands,\n} from \"./commands\";\nconst container = new Container();\ncontainer.bind(CommandRegistry).toSelf().inSingletonScope();\ncontainer.bind(ConcreteCommandFactory).toSelf();\ncontainer.bind(DirectoryCommand).toSelf();\ncontainer.bind(AddFileCommand).toSelf();\ncontainer.bind(DumpCommand).toSelf();\ninitializeCommands(container);\nconst { lazyInject } = getDecorators(container);\nexport { container, lazyInject };"
+  },
+  {
+    "filePath": "src/index.ts",
+    "imports": [
+      "commander",
+      "./container",
+      "./commands/core/command.factory",
+      "./utils/error-handler.function"
+    ],
+    "exports": [],
+    "checksum": "06c3d9ae73247eb11b4d4e9d62c51114",
+    "source": "import \"reflect-metadata\";\nimport { program } from \"commander\";\nimport { container } from \"./container\";\nimport { ConcreteCommandFactory } from \"./commands/core/command.factory\";\nimport { errorHandler } from \"./utils/error-handler.function\";\nconst commandFactory = container.get(ConcreteCommandFactory);\nprogram\n  .command(\"dir <pathDirectory>\")\n  .description(\n    \"Recursively collects project files from a given directory example: ./src\"\n  )\n  .option(\"-d, --db [dbName]\", \"Optional name of db or new\")\n  .action((pathDirectory, options) => {\n    const command = commandFactory.createCommand(\"dir\");\n    if (command) {\n      command\n        .execute([{ pathDirectory }, options])\n        .catch((err) => errorHandler(err));\n    }\n  });\nprogram\n  .command(\"add <filePath>\")\n  .description(\"Add single file to project JSON\")\n  .option(\"-d, --db [dbName]\", \"Optional name of db or new\")\n  .action(async (filePath, options) => {\n    const command = commandFactory.createCommand(\"add\");\n    if (command) {\n      await command\n        .execute([{ filePath }, options])\n        .catch((err) => errorHandler(err));\n    }\n  });\nprogram\n  .command(\"dump <filePath>\")\n  .description(\n    \"Creates a selective dump of the listed files for analyzing specific solutions\"\n  )\n  .option(\"-d, --db [dbName]\", \"Optional name of db or new\")\n  .action(async (filePath, options) => {\n    const command = commandFactory.createCommand(\"dump\");\n    if (command) {\n      await command\n        .execute([{ filePath }, options])\n        .catch((err) => errorHandler(err));\n    }\n  });\nprogram.parse(process.argv);"
+  },
+  {
+    "filePath": "src/interfaces/command-factory.interface.ts",
+    "imports": [
+      "./command.interface"
+    ],
+    "exports": [
+      "CommandFactory"
+    ],
+    "checksum": "177beb82c66ac2954e25f46cb0498230",
+    "source": "import { Command } from './command.interface';\nexport interface CommandFactory {\n  createCommand(commandName: string): Command | null;\n}"
+  },
+  {
+    "filePath": "src/interfaces/command.interface.ts",
+    "imports": [],
+    "exports": [
+      "Command"
+    ],
+    "checksum": "4047cd960bb846ed279ffd0c4ac221bd",
+    "source": "export interface Command {\n    execute(...args: any[]): Promise<void>;\n  }"
+  },
+  {
+    "filePath": "src/interfaces/command.metadata.interface.ts",
+    "imports": [],
+    "exports": [
+      "CommandMetadata"
+    ],
+    "checksum": "00bde3813bd43d2c1735b5553960cda9",
+    "source": "export interface CommandMetadata {\n    name: string;\n    description?: string;\n  }"
+  },
+  {
+    "filePath": "src/interfaces/config-app.interface.ts",
+    "imports": [],
+    "exports": [
+      "ConfigApp"
+    ],
+    "checksum": "de646322aed7a5cb153949e825c960a6",
+    "source": "export interface ConfigApp {\n  userName?: string;\n  [key: string]: string | number | boolean | undefined;\n}"
+  },
+  {
+    "filePath": "src/interfaces/index.ts",
+    "imports": [
+      "../interfaces/command-factory.interface",
+      "../interfaces/command.interface",
+      "../interfaces/command.metadata.interface",
+      "../interfaces/config-app.interface",
+      "../interfaces/json-scheme.interface",
+      "../interfaces/validation-error.interface",
+      "../interfaces/validation-result.interface",
+      "../interfaces/validation-rule.interface"
+    ],
+    "exports": [
+      "CommandFactory",
+      "Command",
+      "CommandMetadata",
+      "ConfigApp",
+      "JsonScheme",
+      "ValidationError",
+      "ValidationResult",
+      "ValidationRule"
+    ],
+    "checksum": "f0ffb337741d22eb4a254b2b925e7698",
+    "source": "export { CommandFactory } from \"../interfaces/command-factory.interface\";\nexport { Command } from \"../interfaces/command.interface\";\nexport { CommandMetadata } from \"../interfaces/command.metadata.interface\";\nexport { ConfigApp } from \"../interfaces/config-app.interface\";\nexport { JsonScheme } from \"../interfaces/json-scheme.interface\";\nexport { ValidationError } from \"../interfaces/validation-error.interface\";\nexport { ValidationResult } from \"../interfaces/validation-result.interface\";\nexport { ValidationRule } from \"../interfaces/validation-rule.interface\";"
+  },
+  {
+    "filePath": "src/interfaces/json-scheme.interface.ts",
+    "imports": [],
+    "exports": [
+      "JsonScheme"
+    ],
+    "checksum": "bebb417718c22e7c3dd0f614c76ff1f5",
+    "source": "export interface JsonScheme {\n    filePath: string;\n    imports?: string[];\n    exports?: string[];\n    checksum?: string;\n    source: string;\n}"
+  },
+  {
+    "filePath": "src/interfaces/validation-error.interface.ts",
+    "imports": [],
+    "exports": [
+      "ValidationError"
+    ],
+    "checksum": "8805cd811020fb27c74dad209428c056",
+    "source": "export interface ValidationError {\n  field: string;\n  message: string;\n}"
+  },
+  {
+    "filePath": "src/interfaces/validation-result.interface.ts",
+    "imports": [
+      "./validation-error.interface"
+    ],
+    "exports": [],
+    "checksum": "07f73b8d332f25aeb4116cc959e59bea",
+    "source": "import { ValidationError } from \"./validation-error.interface\";\nexport type ValidationResult = {\n  isValid: boolean;\n  errors?: ValidationError[];\n};"
+  },
+  {
+    "filePath": "src/interfaces/validation-rule.interface.ts",
+    "imports": [
+      "./validation-error.interface"
+    ],
+    "exports": [
+      "ValidationRule"
+    ],
+    "checksum": "cffaf1a230f139facae9293bef04746a",
+    "source": "import { ValidationError } from \"./validation-error.interface\";\nexport interface ValidationRule<T = any> {\n  [x: string]: any;\n  validate(fieldName: string, value: any, input: T): ValidationError | null;\n}"
+  },
+  {
+    "filePath": "src/procedures/create-checksum.function.ts",
+    "imports": [
+      "./file-processing-state",
+      "./procedure-handler.interface",
+      "crypto"
+    ],
+    "exports": [
+      "createChecksum"
+    ],
+    "checksum": "63f2462c360ae920128219f07402366c",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nimport { Procedure } from \"./procedure-handler.interface\";\nexport function createChecksum(): Procedure {\n  return (state: FileProcessingState) => {\n    const checksum = require('crypto')\n      .createHash('md5')\n      .update(state.currentContent)\n      .digest('hex');\n    const newState = {\n      ...state,\n      checksum,\n    };\n    return { state: newState, shouldBreak: false };\n  };\n}"
+  },
+  {
+    "filePath": "src/procedures/extract-exports.function.ts",
+    "imports": [
+      "./file-processing-state",
+      "./procedure-handler.interface"
+    ],
+    "exports": [
+      "extractExports"
+    ],
+    "checksum": "daa304982b08b115db0a2e89dd96b988",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nimport { Procedure } from \"./procedure-handler.interface\";\nexport function extractExports(): Procedure {\n    return (state: FileProcessingState) => {\n        const exports = new Set<string>();\n        const patterns = [\n          /export\\s+(?:default\\s+)?(?:const|let|var|function|class|interface|enum)\\s+(\\w+)/g,\n          /export\\s+\\{([^}]+)\\}(?:\\s+from\\s+['\"][^'\"]+['\"])?/g,\n          /export\\s+\\*\\s+from\\s+['\"]([^'\"]+)['\"]/g\n        ];\n        patterns.forEach(regex => {\n          let match;\n          while ((match = regex.exec(state.currentContent)) !== null) {\n            if (match[1]) match[1].split(',').forEach(name => {\n              exports.add(name.trim().split(' as ')[0]);\n            });\n          }\n        });\n        const newState = {\n            ...state,\n            exports: Array.from(exports).filter(Boolean),\n        };\n        return { state: newState, shouldBreak: false };\n    };\n}"
+  },
+  {
+    "filePath": "src/procedures/extract-imports.function.ts",
+    "imports": [
+      "./file-processing-state",
+      "./procedure-handler.interface"
+    ],
+    "exports": [
+      "extractImports"
+    ],
+    "checksum": "c76524140a9cd8e402635daa7f5d55cb",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nimport { Procedure } from \"./procedure-handler.interface\";\nexport function extractImports(): Procedure {\n    return (state: FileProcessingState) => {\n        const importRegex = /from\\s+['\"](.+)['\"]|require\\(['\"](.+?)['\"]\\)/g;\n        const imports = new Set<string>();\n        let match;\n        while ((match = importRegex.exec(state.currentContent)) !== null) {\n          const importPath = match[1] || match[2];\n          if (importPath) imports.add(importPath);\n        }\n        const newState = {\n            ...state,\n            imports: Array.from(imports).filter(i => !i.startsWith('${')),\n        };\n        return { state: newState, shouldBreak: false };\n    };\n}"
+  },
+  {
+    "filePath": "src/procedures/file-processing-state.ts",
+    "imports": [],
+    "exports": [
+      "FileProcessingState"
+    ],
+    "checksum": "338f3b4c03c12e3f898577677ebc8df1",
+    "source": "export class FileProcessingState {\n  originalContent: string;\n  currentContent: string;\n  filePath?: string;\n  imports?: string[];\n  exports?: string[];\n  checksum?: string;\n  stats: {\n    linesRemoved: number;\n    linesReplaced: number;\n    transformationsApplied: number;\n  };\n  constructor(content: string, filePath?: string) {\n    this.originalContent = content;\n    this.currentContent = content;\n    this.filePath = filePath;\n    this.stats = {\n      linesRemoved: 0,\n      linesReplaced: 0,\n      transformationsApplied: 0,\n    };\n  }\n}"
+  },
+  {
+    "filePath": "src/procedures/index.ts",
+    "imports": [
+      "../procedures/remove-empty-lines.function",
+      "../procedures/remove-lines-with-word.function",
+      "../procedures/replace-comments.function",
+      "../procedures/process-file",
+      "../utils/source-files-collector",
+      "../procedures/extract-imports.function",
+      "../procedures/extract-exports.function",
+      "../procedures/create-checksum.function"
+    ],
+    "exports": [
+      "removeEmptyLines",
+      "removeLinesWithWord",
+      "replaceComments",
+      "processFile",
+      "sourceFilesCollector",
+      "extractImports",
+      "extractExports",
+      "createChecksum"
+    ],
+    "checksum": "31b30d4b79bf50c0d719c080017ef7a6",
+    "source": "export { removeEmptyLines } from '../procedures/remove-empty-lines.function';\nexport { removeLinesWithWord } from '../procedures/remove-lines-with-word.function';\nexport { replaceComments } from '../procedures/replace-comments.function';\nexport { processFile } from '../procedures/process-file';\nexport { sourceFilesCollector } from '../utils/source-files-collector';\nexport { extractImports } from '../procedures/extract-imports.function';\nexport { extractExports } from '../procedures/extract-exports.function';\nexport { createChecksum } from '../procedures/create-checksum.function';"
+  },
+  {
+    "filePath": "src/procedures/procedure-handler.interface.ts",
+    "imports": [
+      "./file-processing-state"
+    ],
+    "exports": [
+      "ProcedureHandler"
+    ],
+    "checksum": "70f25323946a49454cafd8ff51e07f1a",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nexport interface ProcedureHandler {\n    state: FileProcessingState;\n    shouldBreak: boolean;\n  }\nexport type Procedure = (state: FileProcessingState) => ProcedureHandler;"
+  },
+  {
+    "filePath": "src/procedures/process-file.ts",
+    "imports": [
+      "./file-processing-state",
+      "./procedure-handler.interface"
+    ],
+    "exports": [
+      "processFile"
+    ],
+    "checksum": "92a7030a33620a707cf96e6c7de06af0",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nimport { Procedure } from \"./procedure-handler.interface\";\nexport function processFile(\n    initialState: FileProcessingState,\n    ...procedures: Procedure[]\n  ): FileProcessingState {\n    let currentState = initialState;\n    for (const procedure of procedures) {\n      const { state: newState, shouldBreak } = procedure(currentState);\n      currentState = newState;\n      if (shouldBreak) break;\n    }\n    return currentState;\n  }"
+  },
+  {
+    "filePath": "src/procedures/remove-empty-lines.function.ts",
+    "imports": [
+      "./file-processing-state",
+      "./procedure-handler.interface"
+    ],
+    "exports": [
+      "removeEmptyLines"
+    ],
+    "checksum": "5fcef250c205a91ea5567693d104a1b5",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nimport { Procedure } from \"./procedure-handler.interface\";\nexport function removeEmptyLines(): Procedure {\n    return (state: FileProcessingState) => {\n      const lines = state.currentContent.split('\\n');\n      const nonEmptyLines = lines.filter(line => line.trim() !== '');\n      const linesRemoved = lines.length - nonEmptyLines.length;\n      const newState = {\n        ...state,\n        currentContent: nonEmptyLines.join('\\n'),\n        stats: {\n          ...state.stats,\n          linesRemoved: state.stats.linesRemoved + linesRemoved,\n          transformationsApplied: state.stats.transformationsApplied + 1,\n        },\n      };\n      return { state: newState, shouldBreak: false };\n    };\n  }"
+  },
+  {
+    "filePath": "src/procedures/remove-lines-with-word.function.ts",
+    "imports": [
+      "./file-processing-state",
+      "./procedure-handler.interface"
+    ],
+    "exports": [
+      "removeLinesWithWord"
+    ],
+    "checksum": "05cfeba940be0b17448db53d4fd6ac3a",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nimport { Procedure } from \"./procedure-handler.interface\";\nexport function removeLinesWithWord(word: string): Procedure {\n    return (state: FileProcessingState) => {\n      const lines = state.currentContent.split('\\n');\n      const filteredLines = lines.filter(line => !line.includes(word));\n      const linesRemoved = lines.length - filteredLines.length;\n      const newState = {\n        ...state,\n        currentContent: filteredLines.join('\\n'),\n        stats: {\n          ...state.stats,\n          linesRemoved: state.stats.linesRemoved + linesRemoved,\n          transformationsApplied: state.stats.transformationsApplied + 1,\n        },\n      };\n      return { state: newState, shouldBreak: false };\n    };\n  }"
+  },
+  {
+    "filePath": "src/procedures/replace-comments.function.ts",
+    "imports": [
+      "./file-processing-state",
+      "./procedure-handler.interface"
+    ],
+    "exports": [
+      "replaceComments"
+    ],
+    "checksum": "2acd970cd958f7520c2032bcb3ad6628",
+    "source": "import { FileProcessingState } from \"./file-processing-state\";\nimport { Procedure } from \"./procedure-handler.interface\";\nexport function replaceComments(): Procedure {\n    return (state: FileProcessingState) => {\n      const lines = state.currentContent.split('\\n');\n      let linesReplaced = 0;\n      const processedLines = lines.map(line => {\n        if (line.includes('\n          linesReplaced++;\n          return line.split('\n        }\n        return line;\n      });\n      const newState = {\n        ...state,\n        currentContent: processedLines.join('\\n'),\n        stats: {\n          ...state.stats,\n          linesReplaced: state.stats.linesReplaced + linesReplaced,\n          transformationsApplied: state.stats.transformationsApplied + 1,\n        },\n      };\n      return { state: newState, shouldBreak: false };\n    };\n  }"
+  },
+  {
+    "filePath": "src/services/config.service.ts",
+    "imports": [
+      "tsyringe",
+      "../interfaces/config-app.interface",
+      "../utils/snake-to-camel"
+    ],
+    "exports": [
+      "ConfigService"
+    ],
+    "checksum": "1ce00b6fc89ed4dd834673e2fce7f153",
+    "source": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+  },
+  {
+    "filePath": "src/utils/error-handler.function.ts",
+    "imports": [
+      "../validations"
+    ],
+    "exports": [
+      "errorHandler"
+    ],
+    "checksum": "3ed2d5ff15fe6b349c89fe1da4dac86f",
+    "source": "import { ValidationFieldError } from \"../validations\";\nexport const errorHandler = (err: Error) => {\n  if (err instanceof ValidationFieldError) {\n    console.error(\"Validation errors:\");\n    console.error(err.errors.join(\"\\n\"));\n    process.exit(1);\n  } else {\n    throw err;\n  }\n};"
+  },
+  {
+    "filePath": "src/utils/greet.ts",
+    "imports": [],
+    "exports": [
+      "greet"
+    ],
+    "checksum": "139b1d98b14ca8c28a84f694e47697c0",
+    "source": "export function greet(name: string): string {\n  return `Hello, ${name}!`;\n}"
+  },
+  {
+    "filePath": "src/utils/save-to-json.ts",
+    "imports": [
+      "../procedures/file-processing-state",
+      "fs"
+    ],
+    "exports": [
+      "saveToJson"
+    ],
+    "checksum": "1da2237d7c6164f4c3c3aebed063ed3a",
+    "source": "import { FileProcessingState } from \"../procedures/file-processing-state\";\nexport const saveToJson = (\n  state: FileProcessingState[],\n  pathOutput: string\n): void => {\n  const filePath = pathOutput ? `${pathOutput}` : \"output.json\";\n  if (state.length === 0) {\n    console.log(\"No files to process\");\n    return;\n  }\n  const content = state.map((fileState) => {\n    return {\n      filePath: fileState.filePath,\n      imports: fileState.imports,\n      exports: fileState.exports,\n      checksum: fileState.checksum,\n      source: fileState.currentContent,\n    };\n  });\n  require(\"fs\").writeFileSync(filePath, JSON.stringify(content, null, 2));\n  console.log(`File saved to ${filePath}`);\n};"
+  },
+  {
+    "filePath": "src/utils/snake-to-camel.ts",
+    "imports": [],
+    "exports": [
+      "snakeToCamel"
+    ],
+    "checksum": "5895d16184a85197678b99d0c7e98cb3",
+    "source": "export const snakeToCamel = (str: string): string =>\n  str\n    .toLowerCase()\n    .replace(/([-_][a-z])/g, (group) =>\n      group.toUpperCase().replace(\"-\", \"\").replace(\"_\", \"\")\n    );"
+  },
+  {
+    "filePath": "src/utils/source-files-collector.ts",
+    "imports": [
+      "fs/promises",
+      "path",
+      "fs",
+      "../procedures/file-processing-state",
+      "../procedures/procedure-handler.interface"
+    ],
+    "exports": [
+      "sourceFilesCollector"
+    ],
+    "checksum": "239a3d27c940bd272a00fc0b52420e76",
+    "source": "import fs from 'fs/promises';\nimport path from 'path';\nimport { constants } from 'fs';\nimport { FileProcessingState } from '../procedures/file-processing-state';\nimport { Procedure } from '../procedures/procedure-handler.interface';\n\ntype FileProcessor = (state: FileProcessingState) => Promise<FileProcessingState>;\nexport const sourceFilesCollector = (\n    baseDir: string,\n    extensions: string[] = ['.txt', '.md', '.json', '.ts', '.js'],\n    fileProcessor?: FileProcessor\n  ) => {\n    const scanDirectory = async (currentDir: string): Promise<FileProcessingState[]> => {\n      try {\n        const entries = await fs.readdir(currentDir, { withFileTypes: true });\n        const results = await Promise.all(\n          entries.map(async (entry) => {\n            const fullPath = path.join(currentDir, entry.name);\n            if (entry.isDirectory()) {\n              return scanDirectory(fullPath);\n            } \n            if (entry.isFile() && extensions.includes(path.extname(entry.name).toLowerCase())) {\n              try {\n                await fs.access(fullPath, constants.R_OK);\n                const content = await fs.readFile(fullPath, 'utf-8');\n                let state = new FileProcessingState(content, fullPath);\n                \n                if (fileProcessor) {\n                  state = await fileProcessor(state);\n                }\n                return [state];\n              } catch (error) {\n                console.warn(`Skipping unreadable file: ${fullPath}`);\n                return [];\n              }\n            }\n            return [];\n          })\n        );\n        return results.flat();\n      } catch (error) {\n        console.warn(`Error reading directory ${currentDir}: ${error}`);\n        return [];\n      }\n    };\n    return {\n      collect: async () => scanDirectory(path.normalize(baseDir)),\n      \n      toProcedures: (states: FileProcessingState[]): Procedure[] => \n        states.map(state => (inputState: FileProcessingState) => ({\n          state: inputState.filePath === state.filePath ? state : inputState,\n          shouldBreak: false\n        }))\n    };\n  };"
+  },
+  {
+    "filePath": "src/validations/core/composite-rule.ts",
+    "imports": [
+      "../../interfaces"
+    ],
+    "exports": [
+      "CompositeRule"
+    ],
+    "checksum": "2a6fa72a7762b1b2d5ee8aeadc3ae097",
+    "source": "import { ValidationError, ValidationRule } from \"../../interfaces\";\nexport class CompositeRule<T = any> implements ValidationRule<T> {\n  constructor(\n    public fieldName: string,\n    private rules: Array<ValidationRule<T>>\n  ) {}\n  validate(fieldName: string, value: any, input: T): ValidationError | null {\n    for (const rule of this.rules) {\n      const error = rule.validate(fieldName, value, input);\n      if (error) {\n        return error;\n      }\n    }\n    return null;\n  }\n}"
+  },
+  {
+    "filePath": "src/validations/core/validate.decorator.ts",
+    "imports": [
+      "../../interfaces/index",
+      "./validation.error"
+    ],
+    "exports": [
+      "Validate"
+    ],
+    "checksum": "797d8449d8d7a81d27438c095f333958",
+    "source": "import { ValidationError, ValidationRule } from \"../../interfaces/index\";\nimport { ValidationFieldError } from \"./validation.error\";\nexport function Validate<T, U extends { [key: string]: any }>(\n  rules: Array<ValidationRule<T>>\n) {\n  return function (\n    target: any,\n    propertyKey: string,\n    descriptor: PropertyDescriptor\n  ) {\n    const originalMethod = descriptor.value;\n    descriptor.value = async function (...args: any[]) {\n      const errors: ValidationError[] = [];\n      const [commandArgs] = args;\n      const [mainArg, options] = commandArgs;\n      const validationInput = {\n        ...(typeof mainArg === \"object\" && mainArg !== null\n          ? mainArg\n          : { value: mainArg }),\n        ...options,\n      };\n      for (const rule of rules) {\n        const fieldName = rule.fieldName;\n        const value = validationInput[fieldName];\n        const error = rule.validate(fieldName, value, validationInput as T);\n        if (error) {\n          errors.push(error);\n        }\n      }\n      if (errors.length > 0) {\n        throw new ValidationFieldError(\n          \"Validation failed\",\n          errors.map((err) => `- ${err.field}: ${err.message}`)\n        );\n      }\n      return originalMethod.apply(this, args);\n    };\n    return descriptor;\n  };\n}"
+  },
+  {
+    "filePath": "src/validations/core/validation.error.ts",
+    "imports": [],
+    "exports": [
+      "ApplicationError",
+      "ValidationFieldError"
+    ],
+    "checksum": "dec0d436acaf4c07b69985a900fa86e7",
+    "source": "export class ApplicationError extends Error {\n  constructor(message: string) {\n    super(message);\n    this.name = this.constructor.name;\n  }\n}\nexport class ValidationFieldError extends ApplicationError {\n  errors: string[];\n  constructor(message: string, errors: string[]) {\n    super(message);\n    this.errors = errors;\n  }\n}"
+  },
+  {
+    "filePath": "src/validations/file-exists-rule.validator.ts",
+    "imports": [
+      "../interfaces",
+      "fs",
+      "path"
+    ],
+    "exports": [
+      "FileExistsRule"
+    ],
+    "checksum": "3c2227f22d0fec6073249736d79deda8",
+    "source": "import { ValidationRule, ValidationError } from \"../interfaces\";\nimport { existsSync } from \"fs\";\nimport path from \"path\";\nexport class FileExistsRule<T = any> implements ValidationRule<T> {\n  constructor(public fieldName: string = \"filePath\") {}\n  validate(fieldName: string, value: any, input: T): ValidationError | null {\n    if (!value) {\n      return {\n        field: this.fieldName,\n        message: `${this.fieldName} is required`,\n      };\n    }\n    const fullPath = path.resolve(value);\n    if (!existsSync(fullPath)) {\n      return {\n        field: this.fieldName,\n        message: `File does not exist at path: ${fullPath}`,\n      };\n    }\n    return null;\n  }\n}"
+  },
+  {
+    "filePath": "src/validations/file-extension-rule.validator.ts",
+    "imports": [
+      "../interfaces",
+      "path"
+    ],
+    "exports": [
+      "FileExtensionRule"
+    ],
+    "checksum": "a8f60e1ce05601ef7cd8d0d9e7a0b831",
+    "source": "import { ValidationRule, ValidationError } from \"../interfaces\";\nimport path from \"path\";\nexport class FileExtensionRule<T = any> implements ValidationRule<T> {\n  constructor(\n    public fieldName: string = \"filePath\",\n    private allowedExtensions: string[] = [\".ts\"]\n  ) {}\n  validate(fieldName: string, value: any, input: T): ValidationError | null {\n    const ext = path.extname(value).toLowerCase();\n    if (!this.allowedExtensions.includes(ext)) {\n      return {\n        field: this.fieldName,\n        message: `Invalid file extension. Allowed: ${this.allowedExtensions.join(\n          \", \"\n        )}`,\n      };\n    }\n    return null;\n  }\n}"
+  },
+  {
+    "filePath": "src/validations/index.ts",
+    "imports": [
+      "../validations/core/composite-rule",
+      "../validations/core/validate.decorator",
+      "../validations/core/validation.error",
+      "../validations/file-exists-rule.validator",
+      "../validations/file-extension-rule.validator",
+      "../validations/is-directory-rule.validator"
+    ],
+    "exports": [
+      "CompositeRule",
+      "Validate",
+      "ValidationFieldError",
+      "FileExistsRule",
+      "FileExtensionRule",
+      "IsDirectoryRule"
+    ],
+    "checksum": "a417f8e57edb32dd227f2d0d36a9e60c",
+    "source": "export { CompositeRule } from \"../validations/core/composite-rule\";\nexport { Validate } from \"../validations/core/validate.decorator\";\nexport { ValidationFieldError } from \"../validations/core/validation.error\";\nexport { FileExistsRule } from \"../validations/file-exists-rule.validator\";\nexport { FileExtensionRule } from \"../validations/file-extension-rule.validator\";\nexport { IsDirectoryRule } from \"../validations/is-directory-rule.validator\";"
+  },
+  {
+    "filePath": "src/validations/is-directory-rule.validator.ts",
+    "imports": [
+      "../interfaces",
+      "fs",
+      "path"
+    ],
+    "exports": [
+      "IsDirectoryRule"
+    ],
+    "checksum": "849fd56e2846936bcc320661d040ab9e",
+    "source": "import { ValidationRule, ValidationError } from \"../interfaces\";\nimport { existsSync, statSync } from \"fs\";\nimport path from \"path\";\nexport class IsDirectoryRule<T = any> implements ValidationRule<T> {\n  constructor(public fieldName: string = \"pathDirectory\") {}\n  validate(fieldName: string, value: any, input: T): ValidationError | null {\n    \n    if (value === undefined || value === null || value === \"\") {\n      return {\n        field: this.fieldName,\n        message: `Directory path is required`,\n      };\n    }\n    const fullPath = path.resolve(value);\n    if (!existsSync(fullPath)) {\n      return {\n        field: this.fieldName,\n        message: `Directory does not exist: ${fullPath}`,\n      };\n    }\n    if (!statSync(fullPath).isDirectory()) {\n      return {\n        field: this.fieldName,\n        message: `Path is not a directory: ${fullPath}`,\n      };\n    }\n    return null;\n  }\n}"
+  }
+]

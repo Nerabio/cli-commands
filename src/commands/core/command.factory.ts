@@ -1,13 +1,13 @@
-import { Command } from "../interfaces/command.interface";
-import { CommandMetadata } from "../interfaces/command.metadata.interface";
+import { Command } from "../../interfaces/command.interface";
+import { CommandMetadata } from "../../interfaces/command.metadata.interface";
 import { CommandRegistry } from "./command.registry";
-import { CommandFactory } from "../interfaces/command-factory.interface";
+import { CommandFactory } from "../../interfaces/command-factory.interface";
 import { injectable } from "inversify";
-import { container } from "../container";
+import { container } from "../../container";
 
 @injectable()
 export class ConcreteCommandFactory implements CommandFactory {
-  constructor(private registry: CommandRegistry) {}
+  constructor(private readonly registry: CommandRegistry) {}
 
   createCommand(commandName: string): Command | null {
     const CommandConstructor = this.registry.getCommandConstructor(commandName);
