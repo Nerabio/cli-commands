@@ -3,7 +3,7 @@ import { existsSync } from "fs";
 import path from "path";
 
 export class FileExistsRule<T = any> implements ValidationRule<T> {
-  constructor(public fieldName: string = "filePath") {}
+  constructor(public fieldName: string) {}
 
   validate(fieldName: string, value: any, input: T): ValidationError | null {
     if (!value) {

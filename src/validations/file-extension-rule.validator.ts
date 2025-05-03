@@ -3,8 +3,8 @@ import path from "path";
 
 export class FileExtensionRule<T = any> implements ValidationRule<T> {
   constructor(
-    public fieldName: string = "filePath",
-    private allowedExtensions: string[] = [".ts"]
+    public fieldName: string,
+    private readonly allowedExtensions: string[] = [".ts"]
   ) {}
 
   validate(fieldName: string, value: any, input: T): ValidationError | null {

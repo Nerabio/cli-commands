@@ -1,4 +1,4 @@
-import { FileProcessingState } from "../procedures/file-processing-state";
+import { FileProcessingState } from "../procedures";
 
 export const saveToJson = (
   state: FileProcessingState[],
@@ -18,6 +18,7 @@ export const saveToJson = (
       exports: fileState.exports,
       checksum: fileState.checksum,
       source: fileState.currentContent,
+      compression: fileState.compression,
     };
   });
 

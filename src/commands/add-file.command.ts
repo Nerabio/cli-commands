@@ -1,5 +1,5 @@
-import { CommandDecorator } from "./core/command.decorator";
 import path from "path";
+import fs, { constants } from "fs/promises";
 import {
   processFile,
   createChecksum,
@@ -8,17 +8,18 @@ import {
   removeEmptyLines,
   removeLinesWithWord,
   replaceComments,
+  FileProcessingState,
 } from "../procedures";
-import { FileProcessingState } from "../procedures/file-processing-state";
-import fs, { constants } from "fs/promises";
-import { Command } from "../interfaces/command.interface";
-import { JsonScheme } from "../interfaces/json-scheme.interface";
+import { JsonScheme, Command } from "../interfaces";
 import { FileExistsRule, FileExtensionRule, Validate } from "../validations";
+import { injectable } from "inversify";
+import { CommandDecorator } from "../decorators/command.decorator";
 
 @CommandDecorator({
   name: "add",
   description: "Add single file to project JSON",
 })
+@injectable()
 export class AddFileCommand implements Command {
   @Validate([
     new FileExistsRule("filePath"),

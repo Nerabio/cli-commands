@@ -1,13 +1,12 @@
 import "reflect-metadata";
 import { Container } from "inversify";
-import getDecorators from "inversify-inject-decorators";
 import {
   CommandRegistry,
   ConcreteCommandFactory,
   DirectoryCommand,
   AddFileCommand,
   DumpCommand,
-  initializeCommands,
+  DiffCommand,
 } from "./commands";
 import { ConfigService } from "./services";
 
@@ -16,10 +15,13 @@ const container = new Container();
 container.bind(ConfigService).toSelf();
 container.bind(CommandRegistry).toSelf().inSingletonScope();
 container.bind(ConcreteCommandFactory).toSelf();
-container.bind(DirectoryCommand).toSelf();
-container.bind(AddFileCommand).toSelf();
-container.bind(DumpCommand).toSelf();
+container.bind(Container).toConstantValue(container);
 
-initializeCommands(container);
-const { lazyInject } = getDecorators(container);
-export { container, lazyInject };
+[DirectoryCommand, AddFileCommand, DumpCommand, DiffCommand].forEach(
+  (command) => {
+    container.bind(command).toSelf();
+    container.get(CommandRegistry).register(command);
+  }
+);
+
+export { container };

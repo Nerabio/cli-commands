@@ -1,2 +1,0 @@
-./src/commands/dump.command.ts
-./src/validations/core/validate.decorator.ts

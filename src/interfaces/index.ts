@@ -1,8 +1,9 @@
-export { CommandFactory } from "../interfaces/command-factory.interface";
-export { Command } from "../interfaces/command.interface";
-export { CommandMetadata } from "../interfaces/command.metadata.interface";
-export { ConfigApp } from "../interfaces/config-app.interface";
-export { JsonScheme } from "../interfaces/json-scheme.interface";
-export { ValidationError } from "../interfaces/validation-error.interface";
-export { ValidationResult } from "../interfaces/validation-result.interface";
-export { ValidationRule } from "../interfaces/validation-rule.interface";
+export { CommandFactory } from "./command-factory.interface";
+export { Command } from "./command.interface";
+export { CommandMetadata } from "./command.metadata.interface";
+export { ConfigApp } from "./config-app.interface";
+export { JsonScheme } from "./json-scheme.interface";
+export { ValidationError } from "./validation-error.interface";
+export { ValidationResult } from "./validation-result.interface";
+export { ValidationRule } from "./validation-rule.interface";
+export { CommandArgument } from "./command-argument.interface";

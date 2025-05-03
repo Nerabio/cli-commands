@@ -1,7 +1,7 @@
+import { CommandDecorator } from "../decorators/command.decorator";
 import { injectable } from "inversify";
-import { Command } from "../interfaces/command.interface";
-import { CommandDecorator } from "./core/command.decorator";
-import { saveToJson } from "../utils/save-to-json";
+import { Command } from "../interfaces";
+import { saveToJson } from "../utils";
 import {
   sourceFilesCollector,
   processFile,
@@ -11,6 +11,7 @@ import {
   removeEmptyLines,
   removeLinesWithWord,
   replaceComments,
+  compress,
 } from "../procedures";
 import { IsDirectoryRule, Validate } from "../validations";
 
@@ -34,7 +35,8 @@ export class DirectoryCommand implements Command {
         extractExports(),
         removeEmptyLines(),
         removeLinesWithWord("TODO"),
-        replaceComments()
+        replaceComments(),
+        compress()
       )
     );
 

@@ -1,9 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { constants } from "fs";
-import { FileProcessingState } from "../procedures/file-processing-state";
-import { Procedure } from "../procedures/processing-result.interface";
-
+import { FileProcessingState, Procedure } from "../procedures";
 // Тип для функции обработки файла
 type FileProcessor = (
   state: FileProcessingState

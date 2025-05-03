@@ -1,22 +1,24 @@
-import { Command } from "../interfaces";
-import { Validate, FileExistsRule, FileExtensionRule } from "../validations";
-import { CommandDecorator } from "./core/command.decorator";
 import path from "path";
 import fs, { constants } from "fs/promises";
+import { Command } from "../interfaces";
+import { Validate, FileExistsRule, FileExtensionRule } from "../validations";
 import {
   processFile,
   createChecksum,
   extractImports,
   extractExports,
+  FileProcessingState,
 } from "../procedures";
-import { FileProcessingState } from "../procedures/file-processing-state";
-import { saveToJson } from "../utils/save-to-json";
+import { saveToJson } from "../utils";
+import { injectable } from "inversify";
+import { CommandDecorator } from "../decorators/command.decorator";
 
 @CommandDecorator({
   name: "dump",
   description:
     "Creates a selective dump of the listed files for analyzing specific solutions",
 })
+@injectable()
 export class DumpCommand implements Command {
   @Validate([
     new FileExistsRule("filePath"),

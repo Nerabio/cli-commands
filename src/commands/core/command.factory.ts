@@ -1,28 +1,33 @@
-import { Command } from "../../interfaces/command.interface";
-import { CommandMetadata } from "../../interfaces/command.metadata.interface";
+import { Container, inject, injectable } from "inversify";
+import { Command, CommandMetadata, CommandFactory } from "../../interfaces";
 import { CommandRegistry } from "./command.registry";
-import { CommandFactory } from "../../interfaces/command-factory.interface";
-import { injectable } from "inversify";
-import { container } from "../../container";
 
 @injectable()
 export class ConcreteCommandFactory implements CommandFactory {
-  constructor(private readonly registry: CommandRegistry) {}
+  constructor(
+    @inject(CommandRegistry) private readonly registry: CommandRegistry,
+    @inject(Container) private readonly container: Container
+  ) {}
 
   createCommand(commandName: string): Command | null {
-    const CommandConstructor = this.registry.getCommandConstructor(commandName);
+    const CommandConstructor = this.registry.get(commandName);
     if (CommandConstructor) {
-      return container.get(CommandConstructor);
+      return this.container.get(CommandConstructor);
     }
     return null;
   }
 
   getCommandMetadata(commandName: string): CommandMetadata | undefined {
-    const CommandConstructor = this.registry.getCommandConstructor(commandName);
+    const CommandConstructor = this.registry.get(commandName);
+    if (!CommandConstructor) {
+      return undefined;
+    }
     return this.getCommandMetadataFromConstructor(CommandConstructor);
   }
 
-  private getCommandMetadataFromConstructor(CommandConstructor: new (...args: any[]) => Command | null): CommandMetadata | undefined {
+  private getCommandMetadataFromConstructor(
+    CommandConstructor: new (...args: any[]) => Command | null
+  ): CommandMetadata | undefined {
     if (CommandConstructor) {
       return CommandConstructor.prototype.__commandMetadata;
     }

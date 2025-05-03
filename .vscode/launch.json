@@ -7,13 +7,7 @@
       "name": "Debug TS (ts-node)",
       "runtimeArgs": ["-r", "ts-node/register"],
       //"args": ["${workspaceFolder}/src/index.ts"],
-      "args": [
-        "src/index.ts",
-        "add",
-        "./src/procedures/process-file.ts",
-        "-d",
-        "dump.json"
-      ],
+      "args": ["src/main.ts", "dir", "./src", "-d", "total.json"],
       "skipFiles": ["<node_internals>/**"],
       "console": "integratedTerminal"
     },
@@ -23,7 +17,7 @@
       "name": "Debug TS (nodemon)",
       "runtimeExecutable": "nodemon",
       "runtimeArgs": ["--exec", "ts-node"],
-      "args": ["src/index.ts"],
+      "args": ["src/main.ts"],
       "restart": true,
       "console": "integratedTerminal"
     }
