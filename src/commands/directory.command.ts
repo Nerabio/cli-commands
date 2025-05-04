@@ -11,7 +11,6 @@ import {
   removeEmptyLines,
   removeLinesWithWord,
   replaceComments,
-  compress,
 } from "../procedures";
 import { IsDirectoryRule, Validate } from "../validations";
 
@@ -35,8 +34,7 @@ export class DirectoryCommand implements Command {
         extractExports(),
         removeEmptyLines(),
         removeLinesWithWord("TODO"),
-        replaceComments(),
-        compress()
+        replaceComments()
       )
     );
 
