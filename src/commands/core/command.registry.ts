@@ -41,4 +41,15 @@ export class CommandRegistry {
   // getCommandConstructor(commandName: string): new () => Command | null {
   //   return this.commands[commandName];
   // }
+
+  /* 
+  sdfg
+  sfg
+  sdfg
+  sdf
+  gsd
+  fg
+  sdg
+  dsgf
+  */
 }

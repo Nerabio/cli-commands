@@ -7,7 +7,17 @@
       "name": "Debug TS (ts-node)",
       "runtimeArgs": ["-r", "ts-node/register"],
       //"args": ["${workspaceFolder}/src/index.ts"],
-      "args": ["src/main.ts", "dir", "./src", "-d", "total.json"],
+      //"args": ["src/main.ts", "dir", "./src", "-d", "total.json", "-f", "txt"],
+      //"args": ["src/main.ts", "dir", "./src"],
+      "args": [
+        "src/main.ts",
+        "dir",
+        "/Users/andanilyuk/Documents/projects/mts/smartweb/apps/smart/src/app/modules/tv-player",
+        "-d",
+        "/Users/andanilyuk/Documents/player_test2.txt",
+        "-f",
+        "txt"
+      ],
       "skipFiles": ["<node_internals>/**"],
       "console": "integratedTerminal"
     },

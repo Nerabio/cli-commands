@@ -1,6 +1,6 @@
 import path from "path";
 import fs, { constants } from "fs/promises";
-import { Command } from "../interfaces";
+import { Command, CommandArgs } from "../interfaces";
 import { Validate, FileExistsRule, FileExtensionRule } from "../validations";
 import {
   processFile,
@@ -8,10 +8,14 @@ import {
   extractImports,
   extractExports,
   FileProcessingState,
+  removeEmptyLines,
+  removeLinesWithWord,
+  replaceComments,
 } from "../procedures";
-import { saveToJson } from "../utils";
+import { saveToFactory } from "../utils";
 import { injectable } from "inversify";
 import { CommandDecorator } from "../decorators/command.decorator";
+import { ConfigService } from "../services";
 
 @CommandDecorator({
   name: "dump",
@@ -20,30 +24,35 @@ import { CommandDecorator } from "../decorators/command.decorator";
 })
 @injectable()
 export class DumpCommand implements Command {
+  constructor(private readonly configService: ConfigService) {}
+
   @Validate([
     new FileExistsRule("filePath"),
     new FileExtensionRule("filePath", [".txt"]),
   ])
-  async execute([{ filePath }, options]: [
-    { filePath: string },
-    { db?: string }
-  ]): Promise<void> {
+  async execute({
+    main: { filePath },
+    options,
+  }: CommandArgs<{ filePath: string }>): Promise<void> {
     const fullPathList = path.resolve(filePath);
-    const jsonFile = options?.db ?? "src.json";
+    const fileDb =
+      options?.db ?? this.configService.getKey("defaultOutputFileName");
 
     const selectedFiles = await this.getSelectedFiles(fullPathList);
-    // Проходим по каждому файлу и обрабатываем его
+
     const processedFiles: FileProcessingState[] = [];
     for (const filePath of selectedFiles) {
       const content = await fs.readFile(filePath, "utf-8");
 
-      // Создание статуса обработки файла
       let state = new FileProcessingState(content, filePath);
       state = processFile(
         state,
         createChecksum(),
         extractImports(),
-        extractExports()
+        extractExports(),
+        removeEmptyLines(),
+        removeLinesWithWord("TODO"),
+        replaceComments()
       );
 
       processedFiles.push({
@@ -57,8 +66,7 @@ export class DumpCommand implements Command {
       });
     }
 
-    // Сохраняем обработанный дамп
-    saveToJson(processedFiles, jsonFile);
+    saveToFactory(processedFiles, fileDb, options?.format);
     console.log("Dump успешно сохранён!");
   }
 

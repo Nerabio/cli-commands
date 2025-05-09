@@ -8,11 +8,12 @@ import {
   DumpCommand,
   DiffCommand,
 } from "./commands";
-import { ConfigService } from "./services";
+import { ConfigService, LoggerService } from "./services";
 
 const container = new Container();
 
-container.bind(ConfigService).toSelf();
+container.bind(LoggerService).toSelf().inSingletonScope();
+container.bind(ConfigService).toSelf().inSingletonScope();
 container.bind(CommandRegistry).toSelf().inSingletonScope();
 container.bind(ConcreteCommandFactory).toSelf();
 container.bind(Container).toConstantValue(container);

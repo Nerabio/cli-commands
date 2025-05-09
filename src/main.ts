@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { program } from "commander";
 import { executeCommand } from "./utils";
+require("dotenv").config();
 
 program
   .command("dir <dirPath>")
@@ -8,6 +9,7 @@ program
     "Recursively collects project files from a given directory example: ./src"
   )
   .option("-d, --db [dbName]", "Optional name of db or new")
+  .option("-f, --format [formatType]", "Output format: json or txt")
   .action((dirPath, options) => executeCommand("dir", { dirPath }, options));
 
 program

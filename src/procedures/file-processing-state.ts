@@ -2,6 +2,7 @@ export class FileProcessingState {
   originalContent: string;
   currentContent: string;
   filePath?: string;
+  filePathShort?: string;
   imports?: string[];
   exports?: string[];
   checksum?: string;
@@ -16,6 +17,7 @@ export class FileProcessingState {
     this.originalContent = content;
     this.currentContent = content;
     this.filePath = filePath;
+    this.filePathShort = "";
     this.compression = undefined;
     this.stats = {
       linesRemoved: 0,

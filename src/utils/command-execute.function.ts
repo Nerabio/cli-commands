@@ -1,17 +1,28 @@
 import { ConcreteCommandFactory } from "../commands";
 import { container } from "../container";
 import { errorHandler } from "./error-handler.function";
-import { CommandArgument } from "../interfaces";
+import { CommandArgs } from "../interfaces";
+
+type MainArg = { filePath: string } | { dirPath: string };
+
+type OptionsArg = {
+  db?: string;
+  format?: "json" | "txt";
+};
 
 const commandFactory = container.get(ConcreteCommandFactory);
 
 export const executeCommand = async (
   commandName: string,
-  arg: CommandArgument,
-  options: CommandArgument
+  main: MainArg,
+  options: OptionsArg = {}
 ) => {
   const command = commandFactory.createCommand(commandName);
   if (command) {
-    command.execute([arg, options]).catch((err) => errorHandler(err));
+    const commandArgs: CommandArgs<MainArg> = {
+      main,
+      options,
+    };
+    command.execute(commandArgs).catch((err) => errorHandler(err));
   }
 };

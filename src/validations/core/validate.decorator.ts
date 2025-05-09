@@ -1,4 +1,4 @@
-import { ValidationError, ValidationRule } from "../../interfaces/index";
+import { CommandArgs, ValidationError, ValidationRule } from "../../interfaces";
 import { ValidationFieldError } from "./validation.error";
 
 export function Validate<T, U extends { [key: string]: any }>(
@@ -11,16 +11,13 @@ export function Validate<T, U extends { [key: string]: any }>(
   ) {
     const originalMethod = descriptor.value;
 
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (args: CommandArgs) {
       const errors: ValidationError[] = [];
 
-      const [commandArgs] = args;
-      const [mainArg, options] = commandArgs;
+      const { main, options } = args;
 
       const validationInput = {
-        ...(typeof mainArg === "object" && mainArg !== null
-          ? mainArg
-          : { value: mainArg }),
+        ...main,
         ...options,
       };
 
@@ -41,7 +38,7 @@ export function Validate<T, U extends { [key: string]: any }>(
         );
       }
 
-      return originalMethod.apply(this, args);
+      return originalMethod.apply(this, [args]);
     };
 
     return descriptor;

@@ -1,3 +1,7 @@
-export interface CommandArgument {
-  [key: string]: string;
+export interface CommandArgs<T = any> {
+  main: T;
+  options: {
+    db?: string;
+    format?: "json" | "txt";
+  };
 }

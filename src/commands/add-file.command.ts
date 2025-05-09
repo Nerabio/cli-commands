@@ -10,10 +10,11 @@ import {
   replaceComments,
   FileProcessingState,
 } from "../procedures";
-import { JsonScheme, Command } from "../interfaces";
+import { JsonScheme, Command, CommandArgs } from "../interfaces";
 import { FileExistsRule, FileExtensionRule, Validate } from "../validations";
 import { injectable } from "inversify";
 import { CommandDecorator } from "../decorators/command.decorator";
+import { ConfigService } from "../services";
 
 @CommandDecorator({
   name: "add",
@@ -21,21 +22,26 @@ import { CommandDecorator } from "../decorators/command.decorator";
 })
 @injectable()
 export class AddFileCommand implements Command {
+  constructor(private readonly configService: ConfigService) {}
+
   @Validate([
     new FileExistsRule("filePath"),
     new FileExtensionRule("filePath", [".ts", ".js"]),
   ])
-  async execute([{ filePath }, options]: [
-    { filePath: string },
-    { db?: string }
-  ]): Promise<void> {
+  async execute({
+    main: { filePath },
+    options,
+  }: CommandArgs<{ filePath: string }>): Promise<void> {
     const fullPath = path.resolve(filePath);
-    const jsonFile = options?.db ?? "src.json";
+    const jsonFile =
+      options?.db ?? this.configService.getKey("defaultOutputFileName");
 
     const currentData = await this.getProjectData(jsonFile);
 
-    if (currentData.some((f: any) => path.resolve(f.filePath) === fullPath)) {
-      console.log(`File ${filePath} already exists in src.json`);
+    if (
+      currentData.some((f: JsonScheme) => path.resolve(f.filePath) === fullPath)
+    ) {
+      console.log(`File ${filePath} already exists in ${jsonFile}`);
       return;
     }
 

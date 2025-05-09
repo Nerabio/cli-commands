@@ -6,4 +6,4 @@ export { JsonScheme } from "./json-scheme.interface";
 export { ValidationError } from "./validation-error.interface";
 export { ValidationResult } from "./validation-result.interface";
 export { ValidationRule } from "./validation-rule.interface";
-export { CommandArgument } from "./command-argument.interface";
+export { CommandArgs } from "./command-argument.interface";

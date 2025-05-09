@@ -1,7 +1,7 @@
 import path from "path";
 import fs, { constants } from "fs/promises";
 import { Validate, FileExistsRule, FileExtensionRule } from "../validations";
-import { Command, JsonScheme } from "../interfaces";
+import { Command, CommandArgs, JsonScheme } from "../interfaces";
 import { getChecksum } from "../utils/";
 import {
   createChecksum,
@@ -15,6 +15,7 @@ import {
 } from "../procedures";
 import { injectable } from "inversify";
 import { CommandDecorator } from "../decorators/command.decorator";
+import { ConfigService } from "../services";
 
 @CommandDecorator({
   name: "diff",
@@ -23,16 +24,19 @@ import { CommandDecorator } from "../decorators/command.decorator";
 })
 @injectable()
 export class DiffCommand implements Command {
+  constructor(private readonly configService: ConfigService) {}
+
   @Validate([
     new FileExistsRule("filePath"),
     new FileExtensionRule("filePath", [".json"]),
   ])
-  async execute([{ filePath }, options]: [
-    { filePath: string },
-    { db?: string }
-  ]): Promise<void> {
+  async execute({
+    main: { filePath },
+    options,
+  }: CommandArgs<{ filePath: string }>): Promise<void> {
     const pathDumpFile = path.resolve(filePath);
-    const jsonFile = options?.db ?? "src.json";
+    const jsonFile =
+      options?.db ?? this.configService.getKey("defaultOutputFileName");
     const dump = await this.getProjectData(pathDumpFile);
 
     const changedList = await Promise.all(

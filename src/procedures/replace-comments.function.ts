@@ -7,16 +7,49 @@ export function replaceComments(): Procedure {
     let linesReplaced = 0;
 
     const processedLines = lines.map((line) => {
-      if (line.includes("//")) {
+      // Удаляем однострочные комментарии (//)
+      if (line.trim().startsWith("//")) {
         linesReplaced++;
-        return line.split("//")[0]; // Удаляем всё после //
+        return "";
+      }
+      // Удаляем inline-комментарии
+      const withoutInlineComments = line.replace(/\/\/.*$/, "").trim();
+      if (withoutInlineComments !== line.trim()) {
+        linesReplaced++;
+        return withoutInlineComments;
       }
       return line;
     });
 
+    // Удаляем многострочные комментарии (/* */)
+    let inMultilineComment = false;
+    const finalLines = processedLines.filter((line, index) => {
+      if (line.includes("/*") && !line.includes("*/")) {
+        inMultilineComment = true;
+        linesReplaced++;
+        return false;
+      }
+      if (inMultilineComment) {
+        if (line.includes("*/")) {
+          inMultilineComment = false;
+          linesReplaced++;
+        }
+        return false;
+      }
+      return true;
+    });
+
+    // Удаляем двойные пустые строки
+    // finalLines.forEach((line, index) => {
+    //   line = line.replace(/\n$/, "").trim();
+    //   return line;
+    // });
+
+    const content = finalLines.join("\n");
+
     const newState = {
       ...state,
-      currentContent: processedLines.join("\n"),
+      currentContent: content,
       stats: {
         ...state.stats,
         linesReplaced: state.stats.linesReplaced + linesReplaced,

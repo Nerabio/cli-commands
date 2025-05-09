@@ -3,7 +3,7 @@ import { ValidationError, ValidationRule } from "../../interfaces";
 export class CompositeRule<T = any> implements ValidationRule<T> {
   constructor(
     public fieldName: string,
-    private rules: Array<ValidationRule<T>>
+    private readonly rules: Array<ValidationRule<T>>
   ) {}
 
   validate(fieldName: string, value: any, input: T): ValidationError | null {

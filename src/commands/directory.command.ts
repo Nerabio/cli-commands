@@ -1,7 +1,7 @@
 import { CommandDecorator } from "../decorators/command.decorator";
 import { injectable } from "inversify";
-import { Command } from "../interfaces";
-import { saveToJson } from "../utils";
+import { Command, CommandArgs } from "../interfaces";
+import { saveToFactory } from "../utils";
 import {
   sourceFilesCollector,
   processFile,
@@ -11,8 +11,10 @@ import {
   removeEmptyLines,
   removeLinesWithWord,
   replaceComments,
+  shortFilePath,
 } from "../procedures";
 import { IsDirectoryRule, Validate } from "../validations";
+import { ConfigService, LoggerService } from "../services";
 
 @CommandDecorator({
   name: "dir",
@@ -21,11 +23,17 @@ import { IsDirectoryRule, Validate } from "../validations";
 })
 @injectable()
 export class DirectoryCommand implements Command {
+  constructor(
+    private readonly logger: LoggerService,
+    private readonly configService: ConfigService
+  ) {}
+
   @Validate([new IsDirectoryRule("dirPath")])
-  async execute([{ dirPath }, options]: [
-    { dirPath: string },
-    { db?: string }
-  ]): Promise<void> {
+  async execute({
+    main: { dirPath },
+    options,
+  }: CommandArgs<{ dirPath: string }>): Promise<void> {
+    this.logger.warn(`dir ${dirPath}`);
     const collector = sourceFilesCollector(dirPath, [".ts"], async (state) =>
       processFile(
         state,
@@ -34,12 +42,20 @@ export class DirectoryCommand implements Command {
         extractExports(),
         removeEmptyLines(),
         removeLinesWithWord("TODO"),
-        replaceComments()
+        replaceComments(),
+        shortFilePath(dirPath)
       )
     );
 
     const processedFiles = await collector.collect();
-    const fileDb = options?.db ?? dirPath;
-    saveToJson(processedFiles, fileDb);
+    const fileDb =
+      options?.db ?? this.configService.getKey("defaultOutputFileName");
+
+    if (!fileDb) {
+      console.error("No output filename provided or invalid filename");
+      return;
+    }
+
+    saveToFactory(processedFiles, fileDb, options?.format);
   }
 }

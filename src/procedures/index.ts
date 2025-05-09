@@ -9,3 +9,4 @@ export { createChecksum } from "./create-checksum.function";
 export { compress } from "./compress.function";
 export { FileProcessingState } from "./file-processing-state";
 export { Procedure } from "./processing-result.interface";
+export { shortFilePath } from "./short-file-path.function";
