@@ -2,7 +2,7 @@ import { replaceComments } from "../replace-comments.function";
 import { FileProcessingState } from "../file-processing-state";
 import { Procedure } from "../processing-result.interface";
 
-describe("replaceComments", () => {
+describe("replaceCommentsx", () => {
   let procedure: Procedure;
 
   beforeEach(() => {
