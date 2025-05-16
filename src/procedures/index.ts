@@ -10,3 +10,4 @@ export { compress } from "./compress.function";
 export { FileProcessingState } from "./file-processing-state";
 export { Procedure } from "./processing-result.interface";
 export { shortFilePath } from "./short-file-path.function";
+export { removeImportsFromCode } from "./remove-imports-from-code.function";

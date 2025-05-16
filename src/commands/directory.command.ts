@@ -12,6 +12,7 @@ import {
   removeLinesWithWord,
   replaceComments,
   shortFilePath,
+  removeImportsFromCode,
 } from "../procedures";
 import { IsDirectoryRule, Validate } from "../validations";
 import { ConfigService, LoggerService } from "../services";
@@ -43,6 +44,7 @@ export class DirectoryCommand implements Command {
         removeEmptyLines(),
         removeLinesWithWord("TODO"),
         replaceComments(),
+        removeImportsFromCode(),
         shortFilePath(dirPath)
       )
     );

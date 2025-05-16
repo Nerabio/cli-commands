@@ -40,12 +40,11 @@ export function replaceComments(): Procedure {
     });
 
     // Удаляем двойные пустые строки
-    // finalLines.forEach((line, index) => {
-    //   line = line.replace(/\n$/, "").trim();
-    //   return line;
-    // });
+    // Оставляем только один перевод строки между строками
+    let content = finalLines.filter((line) => line !== "").join("\n");
 
-    const content = finalLines.join("\n");
+    // Удаляем множественные переводы строк в конце файла
+    content = content.replace(/\n+$/, "\n");
 
     const newState = {
       ...state,
